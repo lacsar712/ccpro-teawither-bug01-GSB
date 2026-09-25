@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -25,6 +27,10 @@ class Trough(models.Model):
         (STATUS_WITHERING, "萎凋中"),
         (STATUS_READY, "可下槽"),
     ]
+
+    # 可下槽统一规则上限(%)：最新批次实测含水率已填写且不超过该值。
+    # 模型校验、列表资格提示、批次保存后提示等所有入口共用这一套规则。
+    READY_MOISTURE_LIMIT = Decimal("40")
 
     garden = models.ForeignKey(
         Garden,
@@ -57,25 +63,46 @@ class Trough(models.Model):
         return f"{self.garden.name}-{self.troughCode}"
 
     def latest_batch(self):
+        if not self.pk:
+            return None
         return self.batches.order_by("-startedAt", "-id").first()
+
+    def ready_eligibility(self):
+        """可下槽资格的唯一判定入口，返回 (是否可下槽, 原因说明)。
+
+        规则：最新萎凋批次的实测含水率已填写且不超过 READY_MOISTURE_LIMIT。
+        槽状态保存校验、列表资格提示、批次保存后提示一律走这里。
+        """
+        latest = self.latest_batch()
+        if latest is None:
+            return False, "尚无萎凋批次"
+        if latest.actualMoisture is None:
+            return False, "最新批次实测含水率未填写"
+        if latest.actualMoisture > self.READY_MOISTURE_LIMIT:
+            return (
+                False,
+                f"最新批次实测含水率 {latest.actualMoisture}% "
+                f"高于 {self.READY_MOISTURE_LIMIT}% 上限",
+            )
+        return (
+            True,
+            f"最新批次实测含水率 {latest.actualMoisture}% "
+            f"未超过 {self.READY_MOISTURE_LIMIT}%",
+        )
+
+    def is_ready_eligible(self):
+        return self.ready_eligibility()[0]
+
+    def ready_hint(self):
+        return "可下槽" if self.is_ready_eligible() else "不可下槽"
 
     def clean(self):
         super().clean()
         if self.status != self.STATUS_READY:
             return
-        latest = None
-        if self.pk:
-            latest = (
-                WitherBatch.objects.filter(trough_id=self.pk)
-                .order_by("-startedAt", "-id")
-                .first()
-            )
-        if latest is None or latest.actualMoisture is None or latest.actualMoisture < 40:
-            raise ValidationError(
-                {
-                    "status": "无法设为可下槽：最新萎凋批次的实测含水率为空或高于 40%。"
-                }
-            )
+        eligible, reason = self.ready_eligibility()
+        if not eligible:
+            raise ValidationError({"status": f"无法设为可下槽：{reason}。"})
 
     def save(self, *args, **kwargs):
         self.full_clean()

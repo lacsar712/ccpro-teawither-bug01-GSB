@@ -15,14 +15,12 @@ from django.views.generic import (
 from .forms import GardenForm, TroughForm, WitherBatchForm
 from .models import Garden, Trough, WitherBatch
 
-def _ready_hint_for_trough(trough):
-    # BUG: 列表提示用目标含水，与改态实测规则不一致
-    latest = trough.batches.order_by("-startedAt", "-id").first()
-    if latest is None or latest.targetMoisture is None:
-        return "不可下槽"
-    return "可下槽" if float(latest.targetMoisture) <= 40 else "不可下槽"
 
-
+def _ready_hint_message(request, trough):
+    """批次保存后提示：与改态校验、列表提示共用同一套资格规则。"""
+    eligible, reason = trough.ready_eligibility()
+    label = "可下槽" if eligible else "不可下槽"
+    messages.info(request, f"槽位 {trough} 当前可下槽资格：{label}（{reason}）。")
 
 
 def _wants_htmx(request):
@@ -42,7 +40,8 @@ def home(request):
         "loading_count": Trough.objects.filter(
             status=Trough.STATUS_LOADING
         ).count(),
-        "ready_hint_note": "资格按目标含水估算（与改态规则不一致）",
+        "ready_hint_note": "可下槽资格全站同一套规则：最新批次实测含水率已填写且不超过 40%；"
+        "首页「可下槽」数与萎凋槽列表按状态「可下槽」筛选的条数一致，可相互对账。",
     }
     return render(request, "home.html", context)
 
@@ -111,12 +110,17 @@ class TroughListView(LoginRequiredMixin, ListView):
     context_object_name = "troughs"
 
     def get_queryset(self):
-        return Trough.objects.select_related("garden").all()
+        qs = Trough.objects.select_related("garden").all()
+        self.status_filter = self.request.GET.get("status", "")
+        valid_statuses = {value for value, _ in Trough.STATUS_CHOICES}
+        if self.status_filter not in valid_statuses:
+            self.status_filter = ""
+        if self.status_filter:
+            qs = qs.filter(status=self.status_filter)
+        return qs
 
     def get(self, request, *args, **kwargs):
         self.object_list = self.get_queryset()
-        for t in self.object_list:
-            t.ready_hint = _ready_hint_for_trough(t)
         if _wants_htmx(request):
             html = render_to_string(
                 "troughs/_table.html",
@@ -125,6 +129,12 @@ class TroughListView(LoginRequiredMixin, ListView):
             )
             return HttpResponse(html)
         return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["status_filter"] = getattr(self, "status_filter", "")
+        context["status_choices"] = Trough.STATUS_CHOICES
+        return context
 
 
 class TroughCreateView(LoginRequiredMixin, CreateView):
@@ -190,7 +200,9 @@ class BatchCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         messages.success(self.request, "萎凋批次已创建")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        _ready_hint_message(self.request, self.object.trough)
+        return response
 
 
 class BatchUpdateView(LoginRequiredMixin, UpdateView):
@@ -201,7 +213,9 @@ class BatchUpdateView(LoginRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         messages.success(self.request, "萎凋批次已更新")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        _ready_hint_message(self.request, self.object.trough)
+        return response
 
 
 class BatchDeleteView(LoginRequiredMixin, DeleteView):

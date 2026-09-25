@@ -169,6 +169,32 @@ a:hover {
   font-size: 0.9rem;
 }
 
+a.stat-link {
+  text-decoration: none;
+}
+
+a.stat-link:hover {
+  text-decoration: none;
+  border-color: var(--tea-green);
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.filter-bar label {
+  font-weight: 600;
+  color: var(--tea-green-dark);
+}
+
+.filter-bar .input {
+  width: auto;
+}
+
 table.data {
   width: 100%;
   border-collapse: collapse;

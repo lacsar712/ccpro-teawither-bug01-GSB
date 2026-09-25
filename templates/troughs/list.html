@@ -5,13 +5,28 @@
   <h1>萎凋槽</h1>
   <div class="actions">
     <button class="btn btn-secondary btn-sm"
-            hx-get="{% url 'trough_list' %}"
+            hx-get="{% url 'trough_list' %}{% if status_filter %}?status={{ status_filter }}{% endif %}"
             hx-target="#trough-table"
             hx-swap="innerHTML">刷新列表</button>
     <a class="btn" href="{% url 'trough_create' %}">新建槽位</a>
   </div>
 </div>
-<div class="card" id="trough-table">
-  {% include "troughs/_table.html" %}
+<div class="card">
+  <form method="get" action="{% url 'trough_list' %}" class="filter-bar">
+    <label for="id_status_filter">状态筛选</label>
+    <select id="id_status_filter" name="status" class="input">
+      <option value="" {% if not status_filter %}selected{% endif %}>全部</option>
+      {% for value, label in status_choices %}
+      <option value="{{ value }}" {% if value == status_filter %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-sm" type="submit">筛选</button>
+    {% if status_filter %}
+    <a class="btn btn-sm btn-secondary" href="{% url 'trough_list' %}">清除筛选</a>
+    {% endif %}
+  </form>
+  <div id="trough-table">
+    {% include "troughs/_table.html" %}
+  </div>
 </div>
 {% endblock %}

@@ -1,3 +1,4 @@
+<p class="muted">共 {{ troughs|length }} 条</p>
 {% if troughs %}
 <table class="data">
   <thead>
@@ -19,7 +20,7 @@
       <td>{{ t.cultivar }}</td>
       <td>{{ t.loadKg }}</td>
       <td><span class="badge badge-{{ t.status }}">{{ t.get_status_display }}</span></td>
-      <td>{{ t.ready_hint|default:"—" }}</td>
+      <td>{{ t.ready_hint }}</td>
       <td class="actions">
         <a class="btn btn-sm btn-secondary" href="{% url 'trough_edit' t.pk %}">编辑</a>
         <a class="btn btn-sm btn-danger" href="{% url 'trough_delete' t.pk %}">删除</a>
@@ -29,5 +30,5 @@
   </tbody>
 </table>
 {% else %}
-<p class="empty">暂无萎凋槽。</p>
+<p class="empty">暂无符合条件的萎凋槽。</p>
 {% endif %}

@@ -26,21 +26,8 @@ class TroughForm(forms.ModelForm):
             "status": forms.Select(attrs={"class": "input"}),
         }
 
-    def clean(self):
-        cleaned = super().clean()
-        status = cleaned.get("status")
-        # BUG: 表单另一套门槛 35，与模型互殴
-        if status == Trough.STATUS_READY:
-            trough = self.instance
-            latest = None
-            if trough and trough.pk:
-                latest = trough.batches.order_by("-startedAt", "-id").first()
-            if latest is not None and latest.actualMoisture is not None:
-                if latest.actualMoisture > 35:
-                    from django.core.exceptions import ValidationError
-
-                    raise ValidationError({"status": "表单侧：实测含水偏高，不可下槽"})
-        return cleaned
+    # 可下槽资格不在表单层另设门槛：ModelForm 校验时会调用
+    # Trough.full_clean()，统一走 Trough.ready_eligibility() 那一套规则。
 
 
 
@@ -82,10 +69,5 @@ class WitherBatchForm(forms.ModelForm):
             local = timezone.localtime(self.instance.startedAt)
             self.initial["startedAt"] = local.strftime("%Y-%m-%dT%H:%M")
 
-    def clean_actualMoisture(self):
-        val = self.cleaned_data.get("actualMoisture")
-        # BUG: 第三套提示挂在批次表单
-        self._ready_hint = (
-            "可下槽" if (val is not None and float(val) >= 30) else "不可下槽"
-        )
-        return val
+    # 批次保存后的可下槽资格提示由视图在保存后统一计算
+    # （同样走 Trough.ready_eligibility()），表单不再另算一套。
