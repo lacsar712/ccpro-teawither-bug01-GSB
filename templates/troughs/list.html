@@ -5,11 +5,23 @@
   <h1>萎凋槽</h1>
   <div class="actions">
     <button class="btn btn-secondary btn-sm"
-            hx-get="{% url 'trough_list' %}"
+            hx-get="{% url 'trough_list' %}{% if filter_ready %}?ready=1{% endif %}"
             hx-target="#trough-table"
             hx-swap="innerHTML">刷新列表</button>
     <a class="btn" href="{% url 'trough_create' %}">新建槽位</a>
   </div>
+</div>
+<div class="filter-bar">
+  {% if filter_ready %}
+  <a class="btn btn-sm btn-secondary filter-chip" href="{% url 'trough_list' %}">全部</a>
+  <span class="btn btn-sm filter-chip filter-chip-active">只看可下槽</span>
+  {% else %}
+  <span class="btn btn-sm filter-chip filter-chip-active">全部</span>
+  <a class="btn btn-sm btn-secondary filter-chip" href="{% url 'trough_list' %}?ready=1">只看可下槽</a>
+  {% endif %}
+  <span class="muted filter-note">
+    「可下槽」筛选数与首页可下槽数一致；资格＝最新批次实测含水率已填且 ≤ 40%。
+  </span>
 </div>
 <div class="card" id="trough-table">
   {% include "troughs/_table.html" %}

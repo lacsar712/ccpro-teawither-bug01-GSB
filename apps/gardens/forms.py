@@ -25,23 +25,9 @@ class TroughForm(forms.ModelForm):
             "loadKg": forms.NumberInput(attrs={"class": "input", "step": "0.01"}),
             "status": forms.Select(attrs={"class": "input"}),
         }
-
-    def clean(self):
-        cleaned = super().clean()
-        status = cleaned.get("status")
-        # BUG: 表单另一套门槛 35，与模型互殴
-        if status == Trough.STATUS_READY:
-            trough = self.instance
-            latest = None
-            if trough and trough.pk:
-                latest = trough.batches.order_by("-startedAt", "-id").first()
-            if latest is not None and latest.actualMoisture is not None:
-                if latest.actualMoisture > 35:
-                    from django.core.exceptions import ValidationError
-
-                    raise ValidationError({"status": "表单侧：实测含水偏高，不可下槽"})
-        return cleaned
-
+        # 不在表单内另立门槛：ModelForm._post_clean 会调用
+        # Trough.full_clean()，可下槽资格由模型 ready_block_reason() 统一校验，
+        # 错误自动挂到 status 字段。
 
 
 class WitherBatchForm(forms.ModelForm):
@@ -81,11 +67,3 @@ class WitherBatchForm(forms.ModelForm):
 
             local = timezone.localtime(self.instance.startedAt)
             self.initial["startedAt"] = local.strftime("%Y-%m-%dT%H:%M")
-
-    def clean_actualMoisture(self):
-        val = self.cleaned_data.get("actualMoisture")
-        # BUG: 第三套提示挂在批次表单
-        self._ready_hint = (
-            "可下槽" if (val is not None and float(val) >= 30) else "不可下槽"
-        )
-        return val
